@@ -6,6 +6,11 @@ let map, directionsService, directionsRenderer;
 const CACHE = {};
 let hasGeometry = false;
 
+// Globale Callback-Funktion für Google Maps
+window.initMap = function () {
+  whenMapsReady(initializeMap);
+};
+
 // Tab-Navigation
 document.querySelectorAll('.tab-btn').forEach(button => {
   button.addEventListener('click', () => {
@@ -35,6 +40,11 @@ function whenMapsReady(cb, timeout = 15000, start = Date.now()) {
   if (window.google && google.maps && google.maps.places && google.maps.directions && google.maps.DirectionsService) {
     hasGeometry = !!google.maps.geometry;
     if (!hasGeometry) console.warn('Geometry Library nicht geladen – Fallback für Distanzberechnung verwendet.');
+    console.log('Google Maps API geladen:', {
+      places: !!google.maps.places,
+      directions: !!google.maps.directions,
+      geometry: hasGeometry
+    });
     return cb();
   }
   if (Date.now() - start > timeout) {
@@ -46,26 +56,31 @@ function whenMapsReady(cb, timeout = 15000, start = Date.now()) {
     showResult(errorMsg, 'danger');
     console.error('Google Maps API Timeout:', errorMsg);
     document.getElementById('map-fallback').style.display = 'block';
+    // Fallback: Karte ohne Directions laden
+    if (window.google && google.maps && !map) {
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 12,
+        center: { lat: 52.52, lng: 13.405 },
+        mapTypeControl: false,
+        streetViewControl: false,
+        styles: [
+          { elementType: "geometry", stylers: [{ color: "#212121" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+          { featureType: "road", elementType: "geometry", stylers: [{ color: "#3d3d3d" }] },
+          { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9aa3b2" }] },
+        ]
+      });
+      showResult('Karte geladen, aber Routenberechnung nicht verfügbar (Directions API fehlt).', 'danger');
+    }
     return;
   }
   showResult('Google Maps API wird geladen...', 'muted');
   setTimeout(() => whenMapsReady(cb, timeout, start), 500);
 }
 
-// Fallback für Distanzberechnung ohne Geometry
-function computeDistanceFallback(lat1, lng1, lat2, lng2) {
-  const R = 6371e3; // Erdradius in Metern
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // in Metern
-}
-
 // Initialisiere Google Maps
-whenMapsReady(() => {
+function initializeMap() {
   try {
     map = new google.maps.Map(document.getElementById('map'), {
       zoom: 12,
@@ -80,20 +95,34 @@ whenMapsReady(() => {
         { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9aa3b2" }] },
       ]
     });
-    directionsService = new google.maps.DirectionsService();
-    directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
+    if (google.maps.directions) {
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
+    }
     acStart = new google.maps.places.Autocomplete(document.getElementById('startAddress'));
     acDest = new google.maps.places.Autocomplete(document.getElementById('destAddress'));
     acRideOrigin = new google.maps.places.Autocomplete(document.getElementById('rideOrigin'));
     acRideDest = new google.maps.places.Autocomplete(document.getElementById('rideDestination'));
     document.getElementById('map-fallback').style.display = 'none';
-    showResult('Google Maps initialisiert (Geometry: ' + (hasGeometry ? 'Ja' : 'Nein') + ')', 'success');
+    showResult('Google Maps initialisiert (Directions: ' + (google.maps.directions ? 'Ja' : 'Nein') + ', Geometry: ' + (hasGeometry ? 'Ja' : 'Nein') + ')', 'success');
   } catch (e) {
     document.getElementById('map-fallback').style.display = 'block';
     showResult('Fehler beim Laden der Karte: ' + e.message, 'danger');
     console.error('Maps Initialisierungsfehler:', e);
   }
-});
+}
+
+// Fallback für Distanzberechnung ohne Geometry
+function computeDistanceFallback(lat1, lng1, lat2, lng2) {
+  const R = 6371e3; // Erdradius in Metern
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // in Metern
+}
 
 function saveStart() {
   localStorage.setItem(KEY_START, document.getElementById('startAddress').value);
@@ -351,7 +380,11 @@ async function renderRoutes() {
     list.appendChild(el);
 
     whenMapsReady(async () => {
-      if (!directionsService) return;
+      if (!directionsService) {
+        const elp = document.getElementById(`traffic_${r.id}`);
+        if (elp) elp.innerHTML = '🚦 Directions API nicht verfügbar';
+        return;
+      }
       const geocoder = new google.maps.Geocoder();
       try {
         const results1 = await new Promise((resolve, reject) => {
@@ -421,6 +454,10 @@ document.getElementById('saveDestBtn').addEventListener('click', saveDest);
 document.getElementById('saveRouteBtn').addEventListener('click', saveRoute);
 document.getElementById('clearRouteFormBtn').addEventListener('click', clearRouteForm);
 document.getElementById('reportTrafficLightBtn').addEventListener('click', () => {
+  if (!map) {
+    showResult('Karte nicht geladen – API-Key oder Adblocker prüfen.', 'danger');
+    return;
+  }
   showResult('🚦 Klicke auf die Karte, um eine Ampel zu melden', 'muted');
   const listener = map.addListener('click', (e) => {
     const pos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
