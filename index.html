@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>DryRide — Trocken radeln</title>
+  <link rel="preconnect" href="https://maps.googleapis.com">
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #121417;
+      --muted: #9aa3b2;
+      --accent: #00d084;
+      --danger: #ff5252;
+      --glass: rgba(255,255,255,0.03);
+      --radius: 12px;
+      --shadow: 0 4px 16px rgba(2,6,23,0.5);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: linear-gradient(180deg, #0b0c0e, #0f1115);
+      color: #e6eef8;
+      -webkit-font-smoothing: antialiased;
+      font-size: 16px;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+    }
+    .app {
+      max-width: 600px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    header .sub {
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .tab-nav {
+      display: flex;
+      gap: 8px;
+      background: var(--glass);
+      border-radius: var(--radius);
+      padding: 4px;
+      position: sticky;
+      top: 12px;
+      z-index: 10;
+    }
+    .tab-nav button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .tab-nav button.active {
+      background: var(--accent);
+      color: #061012;
+      font-weight: 600;
+    }
+    .tab-nav button:hover:not(.active) {
+      background: rgba(255,255,255,0.05);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .panel {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .panel h2 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    input[type="text"], input[type="time"], select {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: inherit;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      width: 100%;
+      min-height: 44px;
+    }
+    input::placeholder {
+      color: rgba(255,255,255,0.3);
+    }
+    .small-btn, .action-btn, .primary {
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      min-height: 44px;
+      text-align: center;
+    }
+    .small-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: inherit;
+    }
+    .primary {
+      background: linear-gradient(90deg, var(--accent), #00c37a);
+      color: #061012;
+      border: none;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,208,132,0.15);
+    }
+    .action-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: inherit;
+    }
+    .action-btn.secondary {
+      border-color: rgba(255,255,255,0.04);
+    }
+    .toggle-enabled {
+      background: rgba(0,208,132,0.15);
+      color: var(--accent);
+      border: 1px solid rgba(0,208,132,0.2);
+    }
+    .toggle-disabled {
+      background: rgba(255,82,82,0.08);
+      color: var(--danger);
+      border: 1px solid rgba(255,82,82,0.1);
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 12px;
+    }
+    .rides-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .ride {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .ride .meta {
+      font-size: 14px;
+    }
+    .ride .meta .sub {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    #result {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--glass);
+      border: 1px solid rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 14px;
+    }
+    @media (min-width: 600px) {
+      .app {
+        max-width: 800px;
+      }
+      header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .tab-nav {
+        padding: 6px;
+      }
+      .tab-nav button {
+        font-size: 16px;
+      }
+      .form-row {
+        flex-direction: row;
+        gap: 16px;
+      }
+      .panel {
+        padding: 20px;
+      }
+      .panel h2 {
+        font-size: 18px;
+      }
+    }
+    @media (min-width: 900px) {
+      .app {
+        max-width: 1000px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" role="application">
+    <header>
+      <div>
+        <h1>DryRide</h1>
+        <div class="sub">Trocken & smart radeln — Benachrichtigungen 1 h vorher</div>
+      </div>
+      <button id="notifyPermissionBtn" class="small-btn">🔔 Benachrichtigungen</button>
+    </header>
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="adhoc">Ad-hoc</button>
+      <button class="tab-btn" data-tab="routes">Routen</button>
+    </div>
+    <div id="adhoc" class="tab-content active">
+      <div class="panel" aria-live="polite">
+        <h2>Ad-hoc-Berechnung</h2>
+        <div class="form-row">
+          <div class="field">
+            <label>Hausadresse (Ziel)</label>
+            <input id="homeAddress" type="text" placeholder="z. B. Musterstraße 1, 10115 Berlin" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Von-Adresse</label>
+            <input id="startAddress" type="text" placeholder="z. B. Bahnhofstraße 5" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Akzeptierter Niederschlag</label>
+            <select id="rainLevel">
+              <option value="0">Kein Niederschlag</option>
+              <option value="0.2" selected>0.2 mm/h</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Trocken-Fenster</label>
+            <select id="dryWindow">
+              <option value="15">15 Minuten</option>
+              <option value="30" selected>30 Minuten</option>
+              <option value="60">60 Minuten</option>
+              <option value="120">2 Stunden</option>
+              <option value="240">4 Stunden</option>
+              <option value="360">6 Stunden</option>
+              <option value="540">9 Stunden</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Suchzeitraum</label>
+            <select id="searchWindow">
+              <option value="0.5" selected>30 Minuten</option>
+              <option value="2">2 Stunden</option>
+              <option value="4">4 Stunden</option>
+              <option value="6">6 Stunden</option>
+              <option value="9">9 Stunden</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="primary" onclick="calculateSafeRide()">Berechnen: Wann losfahren?</button>
+          <button class="action-btn secondary" id="saveHomeBtn">Haus speichern</button>
+          <button class="action-btn secondary" id="saveStartBtn">Von speichern</button>
+        </div>
+        <div id="result" class="muted">Ergebnis erscheint hier.</div>
+      </div>
+    </div>
+    <div id="routes" class="tab-content">
+      <div class="panel">
+        <h2>Neue Route</h2>
+        <div class="form-row">
+          <div class="field">
+            <label>Titel</label>
+            <input id="rideTitle" type="text" placeholder="z. B. Arbeit">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Startadresse</label>
+            <input id="rideOrigin" type="text" placeholder="Start (Autocomplete)">
+          </div>
+          <div class="field">
+            <label>Ziel (leer = Hausadresse)</label>
+            <input id="rideDestination" type="text" placeholder="Ziel (Autocomplete)">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Abfahrtszeit</label>
+            <input id="rideTime" type="time" value="07:30">
+          </div>
+          <div class="field">
+            <label>Wiederholung</label>
+            <select id="rideRepeat">
+              <option value="once">Einmalig</option>
+              <option value="daily" selected>Täglich</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Trocken-Fenster</label>
+            <select id="rideWindow">
+              <option value="15">15 Minuten</option>
+              <option value="30" selected>30 Minuten</option>
+              <option value="60">60 Minuten</option>
+              <option value="120">2 Stunden</option>
+              <option value="240">4 Stunden</option>
+              <option value="360">6 Stunden</option>
+              <option value="540">9 Stunden</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Max Regen (mm/h)</label>
+            <select id="rideRainLevel">
+              <option value="0" selected>Kein Niederschlag</option>
+              <option value="0.2">0.2 mm/h</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="primary" onclick="saveRide()">Route speichern</button>
+          <button class="action-btn secondary" onclick="clearRideForm()">Form löschen</button>
+        </div>
+        <div class="rides-list">
+          <h3 style="margin: 12px 0 8px; font-size: 16px; color: #dfe9f3">Deine Routen</h3>
+          <div id="ridesList" class="rides-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,directions"></script>
+  <script>
+  const KEY_RIDES = 'dryride_rides_v1';
+  const KEY_HOME = 'dryride_home_v1';
+  const KEY_START = 'dryride_start_v1';
+  let acHome, acStart, acRideOrigin, acRideDest;
+  const CACHE = {};
+  const KNMI_API_KEY = 'DEIN_KNMI_API_KEY'; // *** ERSETZE DURCH DEINEN SCHLÜSSEL! ***
+
+  // Tab-Navigation
+  document.querySelectorAll('.tab-btn').forEach(button => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      button.classList.add('active');
+      document.getElementById(button.dataset.tab).classList.add('active');
+    });
+  });
+
+  function showResult(msg, type) {
+    const el = document.getElementById('result');
+    el.innerHTML = msg;
+    el.className = type ? type : 'muted';
+  }
+
+  function whenMapsReady(cb) {
+    if (window.google && google.maps && google.maps.places && google.maps.DirectionsService) return cb();
+    setTimeout(() => whenMapsReady(cb), 200);
+  }
+
+  whenMapsReady(() => {
+    acHome = new google.maps.places.Autocomplete(document.getElementById('homeAddress'));
+    acStart = new google.maps.places.Autocomplete(document.getElementById('startAddress'));
+    acRideOrigin = new google.maps.places.Autocomplete(document.getElementById('rideOrigin'));
+    acRideDest = new google.maps.places.Autocomplete(document.getElementById('rideDestination'));
+  });
+
+  function saveHome() { localStorage.setItem(KEY_HOME, document.getElementById('homeAddress').value); showResult('Hausadresse gespeichert'); }
+  function saveStart() { localStorage.setItem(KEY_START, document.getElementById('startAddress').value); showResult('Startadresse gespeichert'); }
+
+  document.getElementById('saveHomeBtn').onclick = saveHome;
+  document.getElementById('saveStartBtn').onclick = saveStart;
+
+  function loadRides() {
+    const r = localStorage.getItem(KEY_RIDES);
+    const rides = r ? JSON.parse(r) : [];
+    return rides.map(ride => ({
+      ...ride,
+      maxRain: [0, 0.2].includes(ride.maxRain) ? ride.maxRain : 0.2,
+      window: [15, 30, 60, 120, 240, 360, 540].includes(ride.window) ? ride.window : 30
+    }));
+  }
+
+  function saveRides(r) { localStorage.setItem(KEY_RIDES, JSON.stringify(r)); renderRides(); }
+
+  function clearRideForm() {
+    document.getElementById('rideTitle').value = '';
+    document.getElementById('rideOrigin').value = '';
+    document.getElementById('rideDestination').value = '';
+    document.getElementById('rideTime').value = '07:30';
+    document.getElementById('rideRepeat').value = 'daily';
+    document.getElementById('rideWindow').value = '30';
+    document.getElementById('rideRainLevel').value = '0';
+  }
+
+  function saveRide() {
+    const rides = loadRides();
+    const id = Date.now();
+    const r = {
+      id,
+      title: document.getElementById('rideTitle').value || 'unnamed',
+      originAddress: document.getElementById('rideOrigin').value,
+      destinationAddress: document.getElementById('rideDestination').value || localStorage.getItem(KEY_HOME),
+      time: document.getElementById('rideTime').value,
+      repeat: document.getElementById('rideRepeat').value,
+      window: parseInt(document.getElementById('rideWindow').value),
+      maxRain: parseFloat(document.getElementById('rideRainLevel').value),
+      enabled: true
+    };
+    rides.push(r);
+    saveRides(rides);
+    clearRideForm();
+  }
+
+  function deleteRide(id) {
+    const rides = loadRides().filter(r => r.id !== id);
+    saveRides(rides);
+  }
+
+  async function getOpenMeteoPrecip(lat, lng, forecastTime) {
+    const cacheKey = `openmeteo_${lat}_${lng}_${Math.floor(forecastTime.getTime() / (5*60*1000))}`;
+    if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].ts < 5*60*1000) {
+      return CACHE[cacheKey].data;
+    }
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation,weathercode&forecast_days=2`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let closestIdx = 0, minDiff = 1e12;
+      data.hourly.time.forEach((t, i) => {
+        const diff = Math.abs(new Date(t) - forecastTime);
+        if (diff < minDiff) { minDiff = diff; closestIdx = i; }
+      });
+      const result = {
+        precip: data.hourly.precipitation[closestIdx],
+        weatherCode: data.hourly.weathercode[closestIdx]
+      };
+      CACHE[cacheKey] = { data: result, ts: Date.now() };
+      return result;
+    } catch (e) {
+      console.error('Open-Meteo API Fehler:', e);
+      return null;
+    }
+  }
+
+  async function getKNMIPrecip(lat, lng, forecastTime) {
+    const cacheKey = `knmi_${lat}_${lng}_${Math.floor(forecastTime.getTime() / (5*60*1000))}`;
+    if (CACHE[cacheKey] && Date.now() - CACHE[cacheKey].ts < 5*60*1000) {
+      return CACHE[cacheKey].data;
+    }
+    try {
+      const now = new Date();
+      const timeDiffHours = (forecastTime - now) / (1000 * 3600);
+      const dataset = timeDiffHours <= 2 ? 'radar_forecast' : 'harmonie_precipitation';
+      const url = `https://api.dataplatform.knmi.nl/open-data/v1/datasets/${dataset}/versions/1.0/files?lat=${lat}&lon=${lng}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${KNMI_API_KEY}` },
+        cache: 'no-store'
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      let closestPrecip = 0;
+      if (data.files && data.files.length > 0) {
+        let minDiff = Infinity;
+        for (const file of data.files) {
+          if (!file.time || !file.precipitation) continue;
+          const diff = Math.abs(new Date(file.time) - forecastTime);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestPrecip = file.precipitation;
+          }
+        }
+      }
+      const result = { precip: closestPrecip };
+      CACHE[cacheKey] = { data: result, ts: Date.now() };
+      return result;
+    } catch (e) {
+      console.error('KNMI API Fehler:', e.message);
+      return null;
+    }
+  }
+
+  function isRain(rainLevel, precip, weatherCode) {
+    if (precip > rainLevel) return true;
+    if (rainLevel === 0 && weatherCode) {
+      // Drizzle Codes: 300-399 (leichter Fieselregen)
+      return weatherCode >= 300 && weatherCode <= 599;
+    }
+    return false;
+  }
+
+  async function getPrecipAtTime(lat, lng, forecastTime) {
+    const openMeteo = await getOpenMeteoPrecip(lat, lng, forecastTime);
+    const knmi = await getKNMIPrecip(lat, lng, forecastTime);
+    if (openMeteo === null && knmi === null) return null;
+    const precip = Math.max(openMeteo?.precip || 0, knmi?.precip || 0);
+    const weatherCode = openMeteo?.weatherCode || 0;
+    const rainDetected = isRain(rainLevel, precip, weatherCode);
+    console.group(`Niederschlagsabfrage ${forecastTime.toLocaleTimeString('de-DE')}:`);
+    console.log({
+      OpenMeteo: `${openMeteo?.precip || 0}.toFixed(1)} mm/h, Code: ${openMeteo?.weatherCode || '—'}`,
+      KNMI: `${knmi?.precip || 0}.toFixed(1)} mm/h`,
+      Ergebnis: `${precip.toFixed(1)} mm/h`,
+      Fieselregen: weatherCode >= 300 && weatherCode <= 399 ? 'JA' : 'Nein',
+      Akzeptiert: rainDetected ? 'NEIN (Regen)' : 'JA'
+    });
+    console.groupEnd();
+    return { precip, weatherCode, isRain: rainDetected };
+  }
+
+  async function updateCurrentPrecipDisplay() {
+    const startEl = document.getElementById('startAddress');
+    const startVal = startEl.value;
+    if (!startVal) return;
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: startVal }, async function(results, status) {
+      if (status === 'OK' && results[0]) {
+        const loc = results[0].geometry.location;
+        const now = new Date();
+        console.group('🔍 Aktueller Niederschlag: ' + startVal);
+        const { precip, weatherCode, isRain } = await getPrecipAtTime(loc.lat(), loc.lng(), now);
+        if (precip === undefined) {
+          showResult('Suche...', 'muted');
+          console.groupEnd();
+          return;
+        }
+        const limit = parseFloat(document.getElementById('rainLevel').value);
+        const rainType = weatherCode >= 300 && weatherCode <= 399 ? 'Fieselregen' : precip > 0 ? 'Regen' : 'Trocken';
+        showResult(`${isRain ? '🌧' : '☀️'} ${rainType}: ${precip.toFixed(1)} mm/h — ${(isRain && limit === 0) ? 'Warte auf Trockenphase' : 'OK zum Start'}`, isRain ? 'danger' : 'success');
+        console.groupEnd();
+      }
+    });
+  }
+  setInterval(updateCurrentPrecipDisplay, 60 * 1000);
+  updateCurrentPrecipDisplay();
+
+  async function renderRides() {
+    const list = document.getElementById('ridesList');
+    const rides = loadRides();
+    list.innerHTML = rides.length ? '' : '<div class="muted">Keine Routen</div>';
+    const geocoder = new google.maps.Geocoder();
+    for (const r of rides) {
+      const el = document.createElement('div'); el.className = 'ride';
+      const left = document.createElement('div'); left.className = 'meta';
+      left.innerHTML = `<strong>${r.title}</strong>
+        <div class="sub">${r.originAddress} → ${r.destinationAddress}</div>
+        <div class="sub">${r.time} · ${r.repeat}</div>
+        <div class="sub" id="precip_${r.id}">🌦 Laden…</div>`;
+      const right = document.createElement('div');
+      const toggle = document.createElement('button'); toggle.className = 'action-btn ' + (r.enabled ? 'toggle-enabled' : 'toggle-disabled'); toggle.textContent = r.enabled ? 'Aktiv' : 'Inaktiv';
+      toggle.onclick = () => { r.enabled = !r.enabled; saveRides(loadRides().map(x => x.id === r.id ? r : x)); renderRides(); };
+      const edit = document.createElement('button'); edit.className = 'action-btn'; edit.textContent = 'Bearbeiten'; edit.onclick = () => loadRideIntoForm(r.id);
+      const del = document.createElement('button'); del.className = 'action-btn secondary'; del.textContent = 'Löschen'; del.onclick = () => deleteRide(r.id);
+      right.appendChild(toggle); right.appendChild(edit); right.appendChild(del);
+      el.appendChild(left); el.appendChild(right); list.appendChild(el);
+      geocoder.geocode({ address: r.destinationAddress }, async function(results, status) {
+        if (status === 'OK' && results[0]) {
+          const loc = results[0].geometry.location;
+          const { precip, isRain } = await getPrecipAtTime(loc.lat(), loc.lng(), new Date());
+          const elp = document.getElementById(`precip_${r.id}`);
+          if (elp) elp.innerHTML = precip !== undefined ? `${isRain ? '🌧' : '☀️'} ${precip.toFixed(1)} mm/h` : '🌦 Fehler';
+        }
+      });
+    }
+  }
+
+  function loadRideIntoForm(id) {
+    const r = loadRides().find(x => x.id === id); if (!r) return;
+    document.getElementById('rideTitle').value = r.title;
+    document.getElementById('rideOrigin').value = r.originAddress;
+    document.getElementById('rideDestination').value = r.destinationAddress;
+    document.getElementById('rideTime').value = r.time;
+    document.getElementById('rideRepeat').value = r.repeat;
+    document.getElementById('rideWindow').value = r.window;
+    document.getElementById('rideRainLevel').value = r.maxRain;
+    document.querySelector('.tab-btn[data-tab="routes"]').click();
+  }
+
+  async function calculateSafeRide() {
+    showResult('🚴 Berechne optimale Startzeit...');
+    const startVal = document.getElementById('startAddress').value;
+    const destVal = document.getElementById('homeAddress').value;
+    if (!startVal || !destVal) { showResult('Bitte Start und Ziel eingeben', 'danger'); return; }
+    
+    console.group('🗺️ DryRide Berechnung: ' + startVal + ' → ' + destVal);
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: startVal }, async function(results1, status1) {
+      if (status1 !== 'OK' || !results1[0]) { showResult('Startadresse nicht gefunden', 'danger'); console.groupEnd(); return; }
+      const loc1 = results1[0].geometry.location;
+      geocoder.geocode({ address: destVal }, async function(results2, status2) {
+        if (status2 !== 'OK' || !results2[0]) { showResult('Zieladresse nicht gefunden', 'danger'); console.groupEnd(); return; }
+        const loc2 = results2[0].geometry.location;
+        const directionsService = new google.maps.DirectionsService();
+        directionsService.route({
+          origin: startVal,
+          destination: destVal,
+          travelMode: google.maps.TravelMode.BICYCLING
+        }, async (result, status) => {
+          if (status !== 'OK') { showResult('Route nicht gefunden', 'danger'); console.groupEnd(); return; }
+          const duration = result.routes[0].legs[0].duration.value * 1000;
+          const path = result.routes[0].overview_path;
+          console.log(`Route: ${(duration/60000).toFixed(0)}min, ${path.length} Punkte`);
+          
+          const now = new Date();
+          const limit = parseFloat(document.getElementById('rainLevel').value);
+          const dryWindow = parseInt(document.getElementById('dryWindow').value) * 60 * 1000;
+          const searchWindow = parseFloat(document.getElementById('searchWindow').value) * 3600 * 1000;
+          const endTime = new Date(now.getTime() + searchWindow);
+          const dryWindowHours = dryWindow / (60 * 60 * 1000);
+          const dryWindowStr = dryWindowHours >= 1 ? `${dryWindowHours} Stunden` : `${dryWindow / (60 * 1000)} Minuten`;
+          
+          if (dryWindow > searchWindow) {
+            console.warn(`Warnung: Trocken-Fenster (${dryWindow / 60000} Minuten) ist größer als Suchzeitraum (${searchWindow / 3600} Stunden). Suche wird auf Suchzeitraum beschränkt.`);
+          }
+
+          // Prüfe aktuelles Fenster
+          let isNowDry = true;
+          const points = [];
+          for (let i = 0; i <= Math.ceil(duration / (5*60*1000)); i++) {
+            const progress = Math.min(i * 5 * 60 * 1000 / duration, 1);
+            const index = Math.floor(progress * (path.length - 1));
+            const point = path[index];
+            const timeAtPoint = new Date(now.getTime() + progress * duration);
+            points.push({ lat: point.lat(), lng: point.lng(), time: timeAtPoint });
+          }
+          
+          for (const point of points) {
+            const { isRain: pointRain } = await getPrecipAtTime(point.lat, point.lng, point.time);
+            if (pointRain) { isNowDry = false; break; }
+          }
+          
+          if (isNowDry) {
+            let nextRain = null;
+            for (let offset = duration + 5*60*1000; offset <= searchWindow; offset += 5*60*1000) {
+              const checkTime = new Date(now.getTime() + offset);
+              if (checkTime > endTime) break;
+              const { isRain: rainCheck } = await getPrecipAtTime(loc2.lat(), loc2.lng(), checkTime);
+              if (rainCheck) { nextRain = checkTime; break; }
+            }
+            const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            const rainTimeStr = nextRain ? nextRain.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'kein Regen erwartet';
+            showResult(`🚲 Von jetzt, ${timeStr} bis zum Ziel in ${dryWindowStr} trocken, ${rainTimeStr}`, 'success');
+            console.groupEnd();
+            return;
+          }
+          
+          // Suche nächstes trockenes Fenster
+          let firstDryTime = null;
+          for (let offset = 5*60*1000; offset <= searchWindow; offset += 5*60*1000) {
+            const startTime = new Date(now.getTime() + offset);
+            if (startTime > endTime) break;
+            let isDry = true;
+            for (const point of points) {
+              const checkTime = new Date(startTime.getTime() + (point.time - now));
+              if (checkTime > endTime) break;
+              const { isRain: pointRain } = await getPrecipAtTime(point.lat, point.lng, checkTime);
+              if (pointRain) { isDry = false; break; }
+            }
+            if (isDry) { firstDryTime = startTime; break; }
+          }
+          
+          if (firstDryTime) {
+            const timeStr = firstDryTime.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+            let nextRain = null;
+            for (let offset = duration + 5*60*1000; offset <= searchWindow; offset += 5*60*1000) {
+              const checkTime = new Date(firstDryTime.getTime() + offset);
+              if (checkTime > endTime) break;
+              const { isRain: rainCheck } = await getPrecipAtTime(loc2.lat(), loc2.lng(), checkTime);
+              if (rainCheck) { nextRain = checkTime; break; }
+            }
+            const rainTimeStr = nextRain ? nextRain.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 'kein Regen erwartet';
+            showResult(`🌧 Leichter Fieselregen jetzt — trockenes Zeitfenster ab ${timeStr}, ${rainTimeStr}`, 'muted');
+          } else {
+            showResult(`🌧 Kein trockenes Zeitfenster in den nächsten ${(searchWindow/3600000).toFixed(1)} Stunden`, 'danger');
+          }
+          console.groupEnd();
+        });
+      });
+    });
+  }
+
+  // Init
+  renderRides();
+  </script>
+</body>
+</html>
