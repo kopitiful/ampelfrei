@@ -335,7 +335,7 @@
       </div>
     </div>
   </div>
-  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,directions"></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,directions,geometry"></script>
 <script>
   const KEY_ROUTES = 'ampelfrei_routes_v1';
   const KEY_START = 'ampelfrei_start_v1';
@@ -360,12 +360,26 @@
     el.className = type ? type : 'muted';
   }
 
-  function whenMapsReady(cb) {
-    if (window.google && google.maps && google.maps.places && google.maps.directions && google.maps.DirectionsService) {
+  function showLoading(show) {
+    const loading = document.getElementById('loading') || document.createElement('div');
+    loading.id = 'loading';
+    loading.style = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); padding: 16px; border-radius: var(--radius); color: var(--muted);';
+    loading.textContent = 'Lade Route...';
+    if (show) document.body.appendChild(loading);
+    else if (loading.parentNode) document.body.removeChild(loading);
+  }
+
+  function whenMapsReady(cb, timeout = 10000, start = Date.now()) {
+    if (window.google && google.maps && google.maps.places && google.maps.directions && google.maps.DirectionsService && google.maps.geometry) {
       return cb();
     }
+    if (Date.now() - start > timeout) {
+      showResult('Fehler: Google Maps API konnte nicht geladen werden. Bitte Adblocker deaktivieren oder API-Key prüfen.', 'danger');
+      console.error('Google Maps API Timeout');
+      return;
+    }
     showResult('Google Maps API wird geladen...', 'muted');
-    setTimeout(() => whenMapsReady(cb), 200);
+    setTimeout(() => whenMapsReady(cb, timeout, start), 500);
   }
 
   // Initialisiere Google Maps
@@ -453,77 +467,86 @@
   async function getTrafficLights(points) {
     const cacheKey = points.map(p => `${p.lat}_${p.lng}`).join('|');
     if (CACHE[cacheKey]) return CACHE[cacheKey];
-    let count = 0;
-    for (const point of points) {
-      const query = `[out:json];node["highway"="traffic_signals"](around:50,${point.lat},${point.lng});out;`;
-      try {
-        const response = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          body: `data=${encodeURIComponent(query)}`
-        });
-        if (response.ok) {
-          const data = await response.json();
-          count += data.elements.length;
-          data.elements.forEach(signal => {
+    const bounds = points.reduce((b, p) => ({
+      minLat: Math.min(b.minLat, p.lat),
+      maxLat: Math.max(b.maxLat, p.lat),
+      minLng: Math.min(b.minLng, p.lng),
+      maxLng: Math.max(b.maxLng, p.lng)
+    }), { minLat: Infinity, maxLat: -Infinity, minLng: Infinity, maxLng: -Infinity });
+    const query = `[out:json];node["highway"="traffic_signals"](${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng});out;`;
+    try {
+      const response = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: `data=${encodeURIComponent(query)}` });
+      if (response.ok) {
+        const data = await response.json();
+        const signals = data.elements;
+        let count = 0;
+        signals.forEach(signal => {
+          const signalPos = { lat: signal.lat, lng: signal.lon };
+          if (points.some(p => google.maps.geometry.spherical.computeDistanceBetween(
+            new google.maps.LatLng(p.lat, p.lng), new google.maps.LatLng(signal.lat, signal.lon)) <= 50)) {
+            count++;
             new google.maps.Marker({
-              position: { lat: signal.lat, lng: signal.lon },
+              position: signalPos,
               map: map,
-              icon: {
-                url: 'http://maps.google.com/mapfiles/ms/icons/red.png',
-                scaledSize: new google.maps.Size(20, 20)
-              },
+              icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red.png', scaledSize: new google.maps.Size(20, 20) },
               title: 'Ampel'
             });
-          });
-        }
-      } catch (e) {
-        console.error('OSM Overpass Fehler:', e);
+          }
+        });
+        CACHE[cacheKey] = count;
+        return count;
       }
+    } catch (e) {
+      console.error('OSM Overpass Fehler:', e);
+      return 0;
     }
-    CACHE[cacheKey] = count;
-    return count;
   }
 
   async function calculateRoute() {
-    showResult('🚗 Berechne optimale Route...', 'muted');
+    showLoading(true);
     const startVal = document.getElementById('startAddress').value;
     const destVal = document.getElementById('destAddress').value;
     const travelMode = document.getElementById('travelMode').value;
     const priority = document.getElementById('routePriority').value;
 
-    if (!startVal || !destVal) {
-      showResult('Bitte Start- und Zieladresse eingeben', 'danger');
+    if (!startVal.trim() || !destVal.trim() || startVal.length < 3 || destVal.length < 3) {
+      showResult('Bitte gültige Start- und Zieladressen eingeben (mind. 3 Zeichen)', 'danger');
+      showLoading(false);
       return;
     }
 
-    // Stelle sicher, dass directionsService initialisiert ist
     whenMapsReady(async () => {
       if (!directionsService) {
-        showResult('Fehler: Google Maps Directions API nicht geladen', 'danger');
+        showResult('Fehler: Google Maps Directions API nicht geladen. Bitte Adblocker deaktivieren.', 'danger');
         console.error('DirectionsService nicht verfügbar');
+        showLoading(false);
         return;
       }
 
       console.group('🗺️ AmpelFrei Berechnung: ' + startVal + ' → ' + destVal);
       const geocoder = new google.maps.Geocoder();
       try {
+        console.log('Geocoding Startadresse:', startVal);
         const results1 = await new Promise((resolve, reject) => {
           geocoder.geocode({ address: startVal }, (results, status) => {
+            console.log('Geocoding Status (Start):', status);
             if (status === 'OK' && results[0]) resolve(results);
-            else reject(new Error('Startadresse nicht gefunden'));
+            else reject(new Error('Startadresse nicht gefunden: ' + status));
           });
         });
         const loc1 = results1[0].geometry.location;
 
+        console.log('Geocoding Zieladresse:', destVal);
         const results2 = await new Promise((resolve, reject) => {
           geocoder.geocode({ address: destVal }, (results, status) => {
+            console.log('Geocoding Status (Ziel):', status);
             if (status === 'OK' && results[0]) resolve(results);
-            else reject(new Error('Zieladresse nicht gefunden'));
+            else reject(new Error('Zieladresse nicht gefunden: ' + status));
           });
         });
         const loc2 = results2[0].geometry.location;
 
-        // Hole mehrere Routen von Google Maps
+        console.log('Rufe Directions API auf...');
         const result = await new Promise((resolve, reject) => {
           directionsService.route({
             origin: startVal,
@@ -531,6 +554,7 @@
             travelMode: google.maps.TravelMode[travelMode],
             provideRouteAlternatives: true
           }, (result, status) => {
+            console.log('Directions API Status:', status);
             if (status === 'OK') resolve(result);
             else reject(new Error('Route nicht gefunden: ' + status));
           });
@@ -549,15 +573,13 @@
           const distance = leg.distance.value / 1000; // in km
           const duration = leg.duration.value / 60; // in Minuten
           let score;
-
           if (priority === 'traffic_lights') {
-            score = trafficLights * 10 + distance; // Ampeln stark gewichten
+            score = trafficLights * 10 + distance;
           } else if (priority === 'fastest') {
             score = duration;
           } else {
             score = distance;
           }
-
           routeDetails.push({
             index: i,
             trafficLights,
@@ -565,33 +587,30 @@
             duration: Math.round(duration),
             score
           });
-
           if (score < minScore) {
             minScore = score;
             bestRoute = { index: i, trafficLights, distance, duration };
           }
         }
 
-        // Zeige beste Route auf der Karte
         directionsRenderer.setRouteIndex(bestRoute.index);
-
-        // Ergebnis anzeigen
         let resultHtml = `<strong>Beste Route (${priority === 'traffic_lights' ? 'Wenigste Ampeln' : priority === 'fastest' ? 'Schnellste' : 'Kürzeste'}):</strong><br>`;
         resultHtml += `🚦 ${bestRoute.trafficLights} Ampeln<br>`;
         resultHtml += `📏 ${bestRoute.distance} km<br>`;
         resultHtml += `⏱ ${bestRoute.duration} Minuten<br>`;
         resultHtml += `<br><strong>Alle Routen:</strong><br>`;
         routeDetails.forEach(r => {
-          resultHtml += `Route ${r.index + 1}: ${r.trafficLights} Ampeln, ${r.distance} km, ${r.duration} Min<br>`;
+          resultHtml += `<a href="#" onclick="directionsRenderer.setRouteIndex(${r.index}); return false;">Route ${r.index + 1}</a>: ${r.trafficLights} Ampeln, ${r.distance} km, ${r.duration} Min<br>`;
         });
         showResult(resultHtml, 'success');
-
         console.log('Routen:', routeDetails);
         console.groupEnd();
       } catch (e) {
         showResult('Fehler bei der Routenberechnung: ' + e.message, 'danger');
         console.error('Routenberechnungsfehler:', e);
         console.groupEnd();
+      } finally {
+        showLoading(false);
       }
     });
   }
@@ -615,7 +634,6 @@
       right.appendChild(toggle); right.appendChild(edit); right.appendChild(del);
       el.appendChild(left); el.appendChild(right); list.appendChild(el);
 
-      // Ampeln für gespeicherte Route berechnen
       whenMapsReady(async () => {
         if (!directionsService) return;
         const geocoder = new google.maps.Geocoder();
@@ -677,9 +695,19 @@
     document.querySelector('.tab-btn[data-tab="routes"]').click();
   }
 
-  // Button zum Melden einer Ampel (Platzhalter)
   document.getElementById('reportTrafficLightBtn').onclick = () => {
-    showResult('🚦 Ampel-Melden-Funktion: Bitte wähle einen Punkt auf der Karte (zukünftig implementiert)', 'muted');
+    showResult('🚦 Klicke auf die Karte, um eine Ampel zu melden', 'muted');
+    const listener = map.addListener('click', (e) => {
+      const pos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      new google.maps.Marker({
+        position: pos,
+        map: map,
+        icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red.png', scaledSize: new google.maps.Size(20, 20) },
+        title: 'Gemeldete Ampel'
+      });
+      showResult(`Ampel bei ${pos.lat.toFixed(4)}, ${pos.lng.toFixed(4)} gemeldet (zukünftig: an Server senden)`, 'success');
+      google.maps.event.removeListener(listener);
+    });
   };
 
   // Init
