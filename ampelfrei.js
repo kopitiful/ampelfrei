@@ -98,25 +98,30 @@ function initializeMap() {
 }
 
 // REST Directions API aufrufen
-  async function getDirections(origin, destination, travelMode) {
-  const mode = travelMode === 'BICYCLING' ? 'bicycling' : 'driving';
-  const url = `http://localhost:3000/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true`;
-  try {
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === 'OK') {
-        return data;
+  async function getDirections(origin, destination, travelMode, usePedestrianPaths = false) {
+  const modes = travelMode === 'BICYCLING' && usePedestrianPaths ? ['bicycling', 'walking'] : [travelMode === 'BICYCLING' ? 'bicycling' : 'driving'];
+  const results = [];
+  
+  for (const mode of modes) {
+    const url = `http://localhost:3000/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true`;
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK') {
+          results.push({ mode, data });
+        } else {
+          throw new Error(`Directions API Status (${mode}): ${data.status}`);
+        }
       } else {
-        throw new Error(`Directions API Status: ${data.status}`);
+        throw new Error(`Proxy-Fehler (${mode}): ${response.status}`);
       }
-    } else {
-      throw new Error(`Proxy-Fehler: ${response.status}`);
+    } catch (e) {
+      console.error(`Directions Proxy-Fehler (${mode}):`, e);
+      throw e;
     }
-  } catch (e) {
-    console.error('Directions Proxy-Fehler:', e);
-    throw e;
   }
+  return results;
 }
 
 
@@ -257,6 +262,15 @@ function decodePolyline(encoded) {
   }
   return points;
 }
+// Transportmittel-Änderung: Checkbox für Fußwege anzeigen/ausblenden
+document.getElementById('travelMode').addEventListener('change', (e) => {
+  const pedestrianOption = document.getElementById('pedestrianOption');
+  pedestrianOption.style.display = e.target.value === 'BICYCLING' ? 'block' : 'none';
+});
+document.getElementById('rideTravelMode').addEventListener('change', (e) => {
+  const pedestrianOption = document.getElementById('pedestrianOption');
+  pedestrianOption.style.display = e.target.value === 'BICYCLING' ? 'block' : 'none';
+});
 
 async function calculateRoute() {
   showLoading(true);
@@ -264,6 +278,7 @@ async function calculateRoute() {
   const destVal = document.getElementById('destAddress').value.trim();
   const travelMode = document.getElementById('travelMode').value;
   const priority = document.getElementById('routePriority').value;
+  const usePedestrianPaths = document.getElementById('usePedestrianPaths').checked;
 
   if (!startVal || !destVal || startVal.length < 3 || destVal.length < 3) {
     showResult('Bitte gültige Start- und Zieladressen eingeben (mind. 3 Zeichen)', 'danger');
@@ -281,53 +296,74 @@ async function calculateRoute() {
     console.group('🗺️ AmpelFrei Berechnung: ' + startVal + ' → ' + destVal);
     try {
       console.log('Rufe REST Directions API auf...');
-      const data = await getDirections(startVal, destVal, travelMode);
-      if (data.status !== 'OK') {
-        throw new Error(`Directions API Status: ${data.status} - ${data.error_message || 'Unbekannter Fehler'}`);
-      }
-      if (!data.routes || data.routes.length === 0) {
+      const directionResults = await getDirections(startVal, destVal, travelMode, usePedestrianPaths && travelMode === 'BICYCLING');
+      let routes = [];
+      let totalDistance = 0;
+
+      // Kombiniere Routen aus beiden Modi
+      directionResults.forEach(({ mode, data }) => {
+        if (data.routes) {
+          data.routes.forEach((route, index) => {
+            routes.push({ mode, route, originalIndex: index });
+            totalDistance = Math.max(totalDistance, route.legs[0].distance.value / 1000);
+          });
+        }
+      });
+
+      if (routes.length === 0) {
         throw new Error('Keine Routen gefunden. Prüfe die Adressen.');
       }
 
-      const routes = data.routes;
       let bestRoute = null;
       let minScore = Infinity;
       const routeDetails = [];
+      const maxPedestrianDistance = totalDistance * 0.1; // Max 10% Fußwege
 
-      for (let i = 0; i < routes.length; i++) {
-        const route = routes[i];
-        // Verwende overview_polyline statt overview_path
+      for (const { mode, route, originalIndex } of routes) {
         if (!route.overview_polyline || !route.overview_polyline.points) {
-          console.warn(`Route ${i} hat kein overview_polyline. Überspringe.`);
+          console.warn(`Route ${originalIndex} (${mode}) hat kein overview_polyline. Überspringe.`);
           continue;
         }
         const path = decodePolyline(route.overview_polyline.points);
         if (path.length === 0) {
-          console.warn(`Route ${i} konnte nicht dekodiert werden. Überspringe.`);
+          console.warn(`Route ${originalIndex} (${mode}) konnte nicht dekodiert werden. Überspringe.`);
           continue;
         }
+
         const leg = route.legs[0];
         const trafficLights = await getTrafficLights(path);
         const distance = leg.distance.value / 1000; // in km
         const duration = leg.duration.value / 60; // in Minuten
+        let pedestrianDistance = mode === 'walking' ? distance : 0;
+
+        // Prüfe 10%-Regel für Fußwege
+        if (travelMode === 'BICYCLING' && mode === 'walking' && pedestrianDistance > maxPedestrianDistance) {
+          console.log(`Route ${originalIndex} (walking) überschreitet 10% Fußweg-Limit (${pedestrianDistance.toFixed(1)} km > ${maxPedestrianDistance.toFixed(1)} km). Überspringe.`);
+          continue;
+        }
+
         let score;
         if (priority === 'traffic_lights') {
-          score = trafficLights * 10 + distance;
+          score = trafficLights * 10 + distance + (mode === 'walking' ? 5 : 0); // Fußwege leicht bestrafen
         } else if (priority === 'fastest') {
-          score = duration;
+          score = duration + (mode === 'walking' ? 10 : 0); // Fußwege langsamer
         } else {
-          score = distance;
+          score = distance + (mode === 'walking' ? 2 : 0); // Fußwege leicht bestrafen
         }
+
         routeDetails.push({
-          index: i,
+          index: originalIndex,
+          mode,
           trafficLights,
           distance: distance.toFixed(1),
           duration: Math.round(duration),
-          score
+          score,
+          pedestrianDistance: pedestrianDistance.toFixed(1)
         });
+
         if (score < minScore) {
           minScore = score;
-          bestRoute = { index: i, trafficLights, distance, duration };
+          bestRoute = { index: originalIndex, mode, trafficLights, distance, duration, pedestrianDistance };
         }
       }
 
@@ -342,7 +378,7 @@ async function calculateRoute() {
       directionsService.route({
         origin: startVal,
         destination: destVal,
-        travelMode: google.maps.TravelMode[travelMode],
+        travelMode: google.maps.TravelMode[travelMode === 'BICYCLING' && bestRoute.mode === 'walking' ? 'WALKING' : travelMode],
         provideRouteAlternatives: true
       }, (result, status) => {
         if (status === 'OK') {
@@ -356,11 +392,20 @@ async function calculateRoute() {
 
       let resultHtml = `<strong>Beste Route (${priority === 'traffic_lights' ? 'Wenigste Ampeln' : priority === 'fastest' ? 'Schnellste' : 'Kürzeste'}):</strong><br>`;
       resultHtml += `🚦 ${bestRoute.trafficLights} Ampeln<br>`;
-      resultHtml += `📏 ${bestRoute.distance} km<br>`;
+      resultHtml += `📏 ${bestRoute.distance} km`;
+      if (bestRoute.pedestrianDistance > 0) {
+        resultHtml += ` (davon ${bestRoute.pedestrianDistance} km Fußwege)<br>`;
+      } else {
+        resultHtml += `<br>`;
+      }
       resultHtml += `⏱ ${bestRoute.duration} Minuten<br>`;
       resultHtml += `<br><strong>Alle Routen:</strong><br>`;
       routeDetails.forEach(r => {
-        resultHtml += `Route ${r.index + 1}: ${r.trafficLights} Ampeln, ${r.distance} km, ${r.duration} Min<br>`;
+        resultHtml += `Route ${r.index + 1} (${r.mode}): ${r.trafficLights} Ampeln, ${r.distance} km`;
+        if (r.pedestrianDistance > 0) {
+          resultHtml += ` (davon ${r.pedestrianDistance} km Fußwege)`;
+        }
+        resultHtml += `, ${r.duration} Min<br>`;
       });
       showResult(resultHtml, 'success');
       console.log('Routen:', routeDetails);
@@ -374,7 +419,6 @@ async function calculateRoute() {
     }
   });
 }
-
 // Rest der Funktionen (saveStart, saveDest, loadRoutes, etc.) unverändert – kopiere aus vorheriger Version
 
 function saveStart() {
