@@ -196,7 +196,7 @@ async function getTrafficLights(points) {
           if (map) {
             new google.maps.Marker({
               position: signalPos,
- Links to an external site.             map: map,
+              map: map,
               icon: { url: 'http://maps.google.com/mapfiles/ms/icons/red.png', scaledSize: new google.maps.Size(20, 20) },
               title: 'Ampel'
             });
