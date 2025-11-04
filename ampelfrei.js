@@ -1,13 +1,15 @@
+const API_KEY = 'AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0'; // Dein API-Key
 const KEY_ROUTES = 'ampelfrei_routes_v1';
 const KEY_START = 'ampelfrei_start_v1';
 const KEY_DEST = 'ampelfrei_dest_v1';
 let acStart, acDest, acRideOrigin, acRideDest;
-let map, directionsService, directionsRenderer;
+let map;
 const CACHE = {};
 let hasGeometry = false;
 
 // Globale Callback-Funktion für Google Maps
 window.initMap = function () {
+  console.log('initMap aufgerufen');
   whenMapsReady(initializeMap);
 };
 
@@ -23,8 +25,12 @@ document.querySelectorAll('.tab-btn').forEach(button => {
 
 function showResult(msg, type) {
   const el = document.getElementById('result');
-  el.innerHTML = msg;
-  el.className = type ? type : 'muted';
+  if (el) {
+    el.innerHTML = msg;
+    el.className = type ? type : 'muted';
+  } else {
+    console.error('Result-Element nicht gefunden');
+  }
 }
 
 function showLoading(show) {
@@ -36,43 +42,26 @@ function showLoading(show) {
   else if (loading.parentNode) document.body.removeChild(loading);
 }
 
-function whenMapsReady(cb, timeout = 15000, start = Date.now()) {
-  if (window.google && google.maps && google.maps.places && google.maps.directions && google.maps.DirectionsService) {
+function whenMapsReady(cb, timeout = 20000, start = Date.now()) {
+  const mapFallback = document.getElementById('map-fallback');
+  if (window.google && google.maps && google.maps.places) {
     hasGeometry = !!google.maps.geometry;
-    if (!hasGeometry) console.warn('Geometry Library nicht geladen – Fallback für Distanzberechnung verwendet.');
-    console.log('Google Maps API geladen:', {
+    console.log('Google Maps API geladen (REST Directions wird verwendet):', {
       places: !!google.maps.places,
-      directions: !!google.maps.directions,
       geometry: hasGeometry
     });
+    if (mapFallback) mapFallback.style.display = 'none';
     return cb();
   }
   if (Date.now() - start > timeout) {
     let errorMsg = 'Fehler: Google Maps API konnte nicht geladen werden. ';
-    if (!window.google) errorMsg += 'Skript nicht geladen (Adblocker?). ';
-    else if (!google.maps.directions) errorMsg += 'Directions Library fehlt – API-Key prüfen. Siehe https://developers.google.com/maps/documentation/javascript/libraries';
-    else if (!hasGeometry) errorMsg += 'Geometry Library fehlt – Siehe https://developers.google.com/maps/documentation/javascript/geometry';
-    errorMsg += ' Deaktiviere Adblocker und prüfe API-Key.';
+    if (!window.google) errorMsg += 'Skript nicht geladen (Netzwerkproblem?). ';
+    else if (!google.maps) errorMsg += 'Maps API nicht verfügbar. ';
+    else if (!google.maps.places) errorMsg += 'Places Library fehlt. ';
+    errorMsg += ' Prüfe Billing, API-Key und Netzwerk.';
     showResult(errorMsg, 'danger');
     console.error('Google Maps API Timeout:', errorMsg);
-    document.getElementById('map-fallback').style.display = 'block';
-    // Fallback: Karte ohne Directions laden
-    if (window.google && google.maps && !map) {
-      map = new google.maps.Map(document.getElementById('map'), {
-        zoom: 12,
-        center: { lat: 52.52, lng: 13.405 },
-        mapTypeControl: false,
-        streetViewControl: false,
-        styles: [
-          { elementType: "geometry", stylers: [{ color: "#212121" }] },
-          { elementType: "labels.text.stroke", stylers: [{ color: "#212121" }] },
-          { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-          { featureType: "road", elementType: "geometry", stylers: [{ color: "#3d3d3d" }] },
-          { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9aa3b2" }] },
-        ]
-      });
-      showResult('Karte geladen, aber Routenberechnung nicht verfügbar (Directions API fehlt).', 'danger');
-    }
+    if (mapFallback) mapFallback.style.display = 'block';
     return;
   }
   showResult('Google Maps API wird geladen...', 'muted');
@@ -84,7 +73,7 @@ function initializeMap() {
   try {
     map = new google.maps.Map(document.getElementById('map'), {
       zoom: 12,
-      center: { lat: 52.52, lng: 13.405 }, // Berlin als Default
+      center: { lat: 52.52, lng: 13.405 },
       mapTypeControl: false,
       streetViewControl: false,
       styles: [
@@ -95,16 +84,12 @@ function initializeMap() {
         { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9aa3b2" }] },
       ]
     });
-    if (google.maps.directions) {
-      directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
-    }
     acStart = new google.maps.places.Autocomplete(document.getElementById('startAddress'));
     acDest = new google.maps.places.Autocomplete(document.getElementById('destAddress'));
     acRideOrigin = new google.maps.places.Autocomplete(document.getElementById('rideOrigin'));
     acRideDest = new google.maps.places.Autocomplete(document.getElementById('rideDestination'));
     document.getElementById('map-fallback').style.display = 'none';
-    showResult('Google Maps initialisiert (Directions: ' + (google.maps.directions ? 'Ja' : 'Nein') + ', Geometry: ' + (hasGeometry ? 'Ja' : 'Nein') + ')', 'success');
+    showResult('Google Maps initialisiert (REST Directions API bereit)', 'success');
   } catch (e) {
     document.getElementById('map-fallback').style.display = 'block';
     showResult('Fehler beim Laden der Karte: ' + e.message, 'danger');
@@ -112,16 +97,38 @@ function initializeMap() {
   }
 }
 
+// REST Directions API aufrufen
+async function getDirections(origin, destination, travelMode) {
+  const mode = travelMode === 'BICYCLING' ? 'bicycling' : 'driving';
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true&key=${API_KEY}`;
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'OK') {
+        return data;
+      } else {
+        throw new Error(`Directions API Status: ${data.status}`);
+      }
+    } else {
+      throw new Error(`HTTP Fehler: ${response.status}`);
+    }
+  } catch (e) {
+    console.error('Directions API Fehler:', e);
+    throw e;
+  }
+}
+
 // Fallback für Distanzberechnung ohne Geometry
 function computeDistanceFallback(lat1, lng1, lat2, lng2) {
-  const R = 6371e3; // Erdradius in Metern
+  const R = 6371e3;
   const φ1 = lat1 * Math.PI / 180;
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // in Metern
+  return R * c;
 }
 
 function saveStart() {
@@ -235,48 +242,18 @@ async function calculateRoute() {
   }
 
   whenMapsReady(async () => {
-    if (!directionsService) {
-      showResult('Fehler: Directions API nicht geladen. Prüfe API-Key und Adblocker.', 'danger');
+    if (!map) {
+      showResult('Fehler: Karte nicht geladen. Prüfe API-Key und Billing.', 'danger');
       showLoading(false);
       return;
     }
 
     console.group('🗺️ AmpelFrei Berechnung: ' + startVal + ' → ' + destVal);
-    const geocoder = new google.maps.Geocoder();
     try {
-      console.log('Geocoding Startadresse:', startVal);
-      const results1 = await new Promise((resolve, reject) => {
-        geocoder.geocode({ address: startVal }, (results, status) => {
-          console.log('Geocoding Status (Start):', status);
-          if (status === 'OK' && results[0]) resolve(results);
-          else reject(new Error('Startadresse nicht gefunden: ' + status));
-        });
-      });
-
-      console.log('Geocoding Zieladresse:', destVal);
-      const results2 = await new Promise((resolve, reject) => {
-        geocoder.geocode({ address: destVal }, (results, status) => {
-          console.log('Geocoding Status (Ziel):', status);
-          if (status === 'OK' && results[0]) resolve(results);
-          else reject(new Error('Zieladresse nicht gefunden: ' + status));
-        });
-      });
-
-      console.log('Rufe Directions API auf...');
-      const result = await new Promise((resolve, reject) => {
-        directionsService.route({
-          origin: startVal,
-          destination: destVal,
-          travelMode: google.maps.TravelMode[travelMode],
-          provideRouteAlternatives: true
-        }, (result, status) => {
-          console.log('Directions API Status:', status);
-          if (status === 'OK') resolve(result);
-          else reject(new Error('Route nicht gefunden: ' + status));
-        });
-      });
-
-      const routes = result.routes;
+      // REST Directions API aufrufen
+      console.log('Rufe REST Directions API auf...');
+      const data = await getDirections(startVal, destVal, travelMode);
+      const routes = data.routes;
       let bestRoute = null;
       let minScore = Infinity;
       const routeDetails = [];
@@ -309,28 +286,32 @@ async function calculateRoute() {
         }
       }
 
-      directionsRenderer.setDirections(result);
-      directionsRenderer.setRouteIndex(bestRoute.index);
+      // Route auf Karte anzeigen
+      const directionsRenderer = new google.maps.DirectionsRenderer();
+      directionsRenderer.setMap(map);
+      const directionsService = new google.maps.DirectionsService();
+      directionsService.route({
+        origin: startVal,
+        destination: destVal,
+        travelMode: google.maps.TravelMode[travelMode],
+        provideRouteAlternatives: true
+      }, (result, status) => {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+          directionsRenderer.setRouteIndex(bestRoute.index);
+        }
+      });
+
       let resultHtml = `<strong>Beste Route (${priority === 'traffic_lights' ? 'Wenigste Ampeln' : priority === 'fastest' ? 'Schnellste' : 'Kürzeste'}):</strong><br>`;
       resultHtml += `🚦 ${bestRoute.trafficLights} Ampeln<br>`;
       resultHtml += `📏 ${bestRoute.distance} km<br>`;
       resultHtml += `⏱ ${bestRoute.duration} Minuten<br>`;
-      resultHtml += `<br><strong>Alle Routen (klicke zum Umschalten):</strong><br>`;
+      resultHtml += `<br><strong>Alle Routen:</strong><br>`;
       routeDetails.forEach(r => {
-        resultHtml += `<a href="#" data-route-index="${r.index}" class="route-link" style="color: var(--accent);">Route ${r.index + 1}</a>: ${r.trafficLights} Ampeln, ${r.distance} km, ${r.duration} Min<br>`;
+        resultHtml += `Route ${r.index + 1}: ${r.trafficLights} Ampeln, ${r.distance} km, ${r.duration} Min<br>`;
       });
       showResult(resultHtml, 'success');
       console.log('Routen:', routeDetails);
-
-      // Event-Listener für Routen-Umschaltung
-      document.querySelectorAll('.route-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-          e.preventDefault();
-          const index = parseInt(e.target.dataset.routeIndex);
-          directionsRenderer.setRouteIndex(index);
-        });
-      });
-
       console.groupEnd();
     } catch (e) {
       showResult('Fehler bei der Routenberechnung: ' + e.message, 'danger');
@@ -342,7 +323,70 @@ async function calculateRoute() {
   });
 }
 
-async function renderRoutes() {
+// Rest der Funktionen (saveStart, saveDest, loadRoutes, etc.) unverändert – kopiere aus vorheriger Version
+
+function saveStart() {
+  localStorage.setItem(KEY_START, document.getElementById('startAddress').value);
+  showResult('Startadresse gespeichert', 'success');
+}
+
+function saveDest() {
+  localStorage.setItem(KEY_DEST, document.getElementById('destAddress').value);
+  showResult('Zieladresse gespeichert', 'success');
+}
+
+function loadRoutes() {
+  const r = localStorage.getItem(KEY_ROUTES);
+  return r ? JSON.parse(r) : [];
+}
+
+function saveRoutes(routes) {
+  localStorage.setItem(KEY_ROUTES, JSON.stringify(routes));
+  renderRoutes();
+}
+
+function clearRouteForm() {
+  document.getElementById('rideTitle').value = '';
+  document.getElementById('rideOrigin').value = '';
+  document.getElementById('rideDestination').value = '';
+  document.getElementById('rideTravelMode').value = 'DRIVING';
+  document.getElementById('ridePriority').value = 'traffic_lights';
+}
+
+function saveRoute() {
+  const routes = loadRoutes();
+  const id = Date.now();
+  const r = {
+    id,
+    title: document.getElementById('rideTitle').value || 'unnamed',
+    originAddress: document.getElementById('rideOrigin').value,
+    destinationAddress: document.getElementById('rideDestination').value,
+    travelMode: document.getElementById('rideTravelMode').value,
+    priority: document.getElementById('ridePriority').value,
+    enabled: true
+  };
+  routes.push(r);
+  saveRoutes(routes);
+  clearRouteForm();
+}
+
+function deleteRoute(id) {
+  const routes = loadRoutes().filter(r => r.id !== id);
+  saveRoutes(routes);
+}
+
+function loadRouteIntoForm(id) {
+  const r = loadRoutes().find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('rideTitle').value = r.title;
+  document.getElementById('rideOrigin').value = r.originAddress;
+  document.getElementById('rideDestination').value = r.destinationAddress;
+  document.getElementById('rideTravelMode').value = r.travelMode;
+  document.getElementById('ridePriority').value = r.priority;
+  document.querySelector('.tab-btn[data-tab="routes"]').click();
+}
+
+function renderRoutes() {
   const list = document.getElementById('routesList');
   const routes = loadRoutes();
   list.innerHTML = routes.length ? '' : '<div class="muted">Keine Routen</div>';
@@ -379,72 +423,19 @@ async function renderRoutes() {
     el.appendChild(right);
     list.appendChild(el);
 
-    whenMapsReady(async () => {
-      if (!directionsService) {
+    // Ampel-Berechnung für gespeicherte Routen
+    getDirections(r.originAddress, r.destinationAddress, r.travelMode).then(data => {
+      const path = data.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+      getTrafficLights(path).then(count => {
         const elp = document.getElementById(`traffic_${r.id}`);
-        if (elp) elp.innerHTML = '🚦 Directions API nicht verfügbar';
-        return;
-      }
-      const geocoder = new google.maps.Geocoder();
-      try {
-        const results1 = await new Promise((resolve, reject) => {
-          geocoder.geocode({ address: r.originAddress }, (results, status) => {
-            if (status === 'OK' && results[0]) resolve(results);
-            else reject(new Error('Startadresse nicht gefunden'));
-          });
-        });
-        const results2 = await new Promise((resolve, reject) => {
-          geocoder.geocode({ address: r.destinationAddress }, (results, status) => {
-            if (status === 'OK' && results[0]) resolve(results);
-            else reject(new Error('Zieladresse nicht gefunden'));
-          });
-        });
-        const result = await new Promise((resolve, reject) => {
-          directionsService.route({
-            origin: r.originAddress,
-            destination: r.destinationAddress,
-            travelMode: google.maps.TravelMode[r.travelMode],
-            provideRouteAlternatives: true
-          }, (result, status) => {
-            if (status === 'OK') resolve(result);
-            else reject(new Error('Route nicht gefunden'));
-          });
-        });
-
-        const routes = result.routes;
-        let bestRoute = null;
-        let minScore = Infinity;
-        for (let i = 0; i < routes.length; i++) {
-          const path = routes[i].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-          const trafficLights = await getTrafficLights(path);
-          const distance = routes[i].legs[0].distance.value / 1000;
-          const duration = routes[i].legs[0].duration.value / 60;
-          let score = r.priority === 'traffic_lights' ? trafficLights * 10 + distance : r.priority === 'fastest' ? duration : distance;
-          if (score < minScore) {
-            minScore = score;
-            bestRoute = { index: i, trafficLights };
-          }
-        }
-        const elp = document.getElementById(`traffic_${r.id}`);
-        if (elp) elp.innerHTML = `🚦 ${bestRoute.trafficLights} Ampeln`;
-      } catch (e) {
-        console.error('Fehler bei gespeicherter Route:', e);
-        const elp = document.getElementById(`traffic_${r.id}`);
-        if (elp) elp.innerHTML = '🚦 Fehler bei Berechnung';
-      }
+        if (elp) elp.innerHTML = `🚦 ${count} Ampeln`;
+      });
+    }).catch(e => {
+      console.error('Fehler bei gespeicherter Route:', e);
+      const elp = document.getElementById(`traffic_${r.id}`);
+      if (elp) elp.innerHTML = '🚦 Fehler bei Berechnung';
     });
   }
-}
-
-function loadRouteIntoForm(id) {
-  const r = loadRoutes().find(x => x.id === id);
-  if (!r) return;
-  document.getElementById('rideTitle').value = r.title;
-  document.getElementById('rideOrigin').value = r.originAddress;
-  document.getElementById('rideDestination').value = r.destinationAddress;
-  document.getElementById('rideTravelMode').value = r.travelMode;
-  document.getElementById('ridePriority').value = r.priority;
-  document.querySelector('.tab-btn[data-tab="routes"]').click();
 }
 
 // Event-Listener für Buttons
@@ -455,10 +446,10 @@ document.getElementById('saveRouteBtn').addEventListener('click', saveRoute);
 document.getElementById('clearRouteFormBtn').addEventListener('click', clearRouteForm);
 document.getElementById('reportTrafficLightBtn').addEventListener('click', () => {
   if (!map) {
-    showResult('Karte nicht geladen – API-Key oder Adblocker prüfen.', 'danger');
+    showResult('Karte nicht geladen – API-Key oder Billing prüfen.', 'danger');
     return;
   }
-  showResult('🚦 Klicke auf die Karte, um eine Ampel zu melden', 'muted');
+  showResult('🚦 Klicke auf der Karte, um eine Ampel zu melden', 'muted');
   const listener = map.addListener('click', (e) => {
     const pos = { lat: e.latLng.lat(), lng: e.latLng.lng() };
     new google.maps.Marker({
