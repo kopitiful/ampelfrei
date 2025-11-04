@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de; style-src 'self' 'unsafe-inline'; img-src 'self' https://*.googleapis.com https://*.gstatic.com http://maps.google.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://*.googleapis.com https://*.gstatic.com https://fonts.gstatic.com http://maps.google.com data:;">
   <title>AmpelFrei — Weniger Ampeln, mehr Fahrt</title>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <style>
-    /* Dein bestehendes CSS (unverändert) */
+    /* Dein bestehendes CSS (unverändert) – siehe vorherige Antwort für vollständigen CSS */
     :root {
       --bg: #0f1115;
       --card: #121417;
@@ -299,7 +299,7 @@
           <button class="action-btn secondary" id="saveDestBtn">Ziel speichern</button>
         </div>
         <div id="map">
-          <div id="map-fallback">Karte konnte nicht geladen werden. Bitte Adblocker deaktivieren oder API-Key prüfen.</div>
+          <div id="map-fallback">Karte konnte nicht geladen werden. Bitte Billing, API-Key oder Netzwerk prüfen.</div>
         </div>
         <div id="result" class="muted">Ergebnis erscheint hier.</div>
       </div>
@@ -351,7 +351,7 @@
       </div>
     </div>
   </div>
-  <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,directions,geometry&callback=initMap"></script>
+  <script async loading="async" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,geometry&v=weekly&region=DE&callback=initMap"></script>
   <script src="ampelfrei.js"></script>
 </body>
 </html>
