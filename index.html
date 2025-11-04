@@ -1,360 +1,91 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de http://localhost:3000; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://*.googleapis.com https://*.gstatic.com https://fonts.gstatic.com http://maps.google.com data:; font-src 'self' https://fonts.gstatic.com;"> <title>AmpelFrei — Weniger Ampeln, mehr Fahrt</title>
-  <link rel="preconnect" href="https://maps.googleapis.com">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AmpelFrei</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de http://localhost:3000; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://*.googleapis.com https://*.gstatic.com https://fonts.gstatic.com http://maps.google.com data:; font-src 'self' https://fonts.gstatic.com;">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    /* Dein bestehendes CSS (unverändert) – siehe vorherige Antwort für vollständigen CSS */
-    :root {
-      --bg: #0f1115;
-      --card: #121417;
-      --muted: #9aa3b2;
-      --accent: #00d084;
-      --danger: #ff5252;
-      --glass: rgba(255,255,255,0.03);
-      --radius: 12px;
-      --shadow: 0 4px 16px rgba(2,6,23,0.5);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-      color-scheme: dark;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      background: linear-gradient(180deg, #0b0c0e, #0f1115);
-      color: #e6eef8;
-      -webkit-font-smoothing: antialiased;
-      font-size: 16px;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-    }
-    .app {
-      max-width: 600px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    header {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-    header h1 {
-      font-size: 20px;
-      font-weight: 600;
-    }
-    header .sub {
-      color: var(--muted);
-      font-size: 14px;
-      text-align: center;
-    }
-    .tab-nav {
-      display: flex;
-      gap: 8px;
-      background: var(--glass);
-      border-radius: var(--radius);
-      padding: 4px;
-      position: sticky;
-      top: 12px;
-      z-index: 10;
-    }
-    .tab-nav button {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: var(--muted);
-      padding: 10px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border-radius: 8px;
-      transition: background 0.2s, color 0.2s;
-    }
-    .tab-nav button.active {
-      background: var(--accent);
-      color: #061012;
-      font-weight: 600;
-    }
-    .tab-nav button:hover:not(.active) {
-      background: rgba(255,255,255,0.05);
-    }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .panel {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 16px;
-      box-shadow: var(--shadow);
-    }
-    .panel h2 {
-      font-size: 16px;
-      margin-bottom: 12px;
-    }
-    .form-row {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    label {
-      color: var(--muted);
-      font-size: 14px;
-    }
-    input[type="text"], select {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.08);
-      color: inherit;
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 16px;
-      outline: none;
-      width: 100%;
-      min-height: 44px;
-    }
-    input::placeholder {
-      color: rgba(255,255,255,0.3);
-    }
-    .small-btn, .action-btn, .primary {
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 14px;
-      cursor: pointer;
-      min-height: 44px;
-      text-align: center;
-    }
-    .small-btn {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.08);
-      color: inherit;
-    }
-    .primary {
-      background: linear-gradient(90deg, var(--accent), #00c37a);
-      color: #061012;
-      border: none;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0,208,132,0.15);
-    }
-    .action-btn {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.08);
-      color: inherit;
-    }
-    .action-btn.secondary {
-      border-color: rgba(255,255,255,0.04);
-    }
-    .toggle-enabled {
-      background: rgba(0,208,132,0.15);
-      color: var(--accent);
-      border: 1px solid rgba(0,208,132,0.2);
-    }
-    .toggle-disabled {
-      background: rgba(255,82,82,0.08);
-      color: var(--danger);
-      border: 1px solid rgba(255,82,82,0.1);
-    }
-    .muted {
-      color: var(--muted);
-      font-size: 14px;
-      margin-top: 12px;
-    }
-    .rides-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .ride {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px;
-      border-radius: 8px;
-      background: var(--glass);
-      border: 1px solid rgba(255,255,255,0.04);
-    }
-    .ride .meta {
-      font-size: 14px;
-    }
-    .ride .meta .sub {
-      color: var(--muted);
-      font-size: 12px;
-    }
-    #result {
-      margin-top: 12px;
-      padding: 12px;
-      border-radius: 8px;
-      background: var(--glass);
-      border: 1px solid rgba(255,255,255,0.04);
-      color: var(--muted);
-      font-size: 14px;
-    }
     #map {
-      height: 300px;
+      height: 400px;
       width: 100%;
-      border-radius: var(--radius);
-      margin-top: 12px;
-      position: relative;
     }
-    #map-fallback {
+
+    .loading {
       display: none;
-      position: absolute;
+      position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: var(--muted);
-      text-align: center;
-      background: var(--card);
-      padding: 16px;
-      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 20px;
+      border-radius: 5px;
+      z-index: 1000;
     }
-    @media (min-width: 600px) {
-      .app {
-        max-width: 800px;
-      }
-      header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-      }
-      .tab-nav {
-        padding: 6px;
-      }
-      .tab-nav button {
-        font-size: 16px;
-      }
-      .form-row {
-        flex-direction: row;
-        gap: 16px;
-      }
-      .panel {
-        padding: 20px;
-      }
-      .panel h2 {
-        font-size: 18px;
-      }
+
+    .result {
+      margin-top: 20px;
     }
-    @media (min-width: 900px) {
-      .app {
-        max-width: 1000px;
-      }
+
+    .container {
+      max-width: 800px;
+    }
+
+    h1 {
+      font-family: 'Google Sans', sans-serif;
+    }
+
+    .alert {
+      font-size: 1rem;
     }
   </style>
 </head>
 <body>
-  <div class="app" role="application">
-    <header>
-      <div>
-        <h1>AmpelFei</h1>
-        <div class="sub">Weniger Ampeln, flüssiger fahren — für Auto & Fahrrad</div>
+  <div class="container mt-5">
+    <h1 class="mb-4">AmpelFrei</h1>
+    <form id="routeForm">
+      <div class="mb-3">
+        <label for="startAddress" class="form-label">Startadresse</label>
+        <input type="text" class="form-control" id="startAddress" placeholder="z.B. Argelanderstraße 15, Bonn">
       </div>
-      <button id="reportTrafficLightBtn" class="small-btn">🚦 Ampel melden</button>
-    </header>
-    <div class="tab-nav">
-      <button class="tab-btn active" data-tab="adhoc">Ad-hoc</button>
-      <button class="tab-btn" data-tab="routes">Routen</button>
-    </div>
-    <div id="adhoc" class="tab-content active">
-      <div class="panel" aria-live="polite">
-        <h2>Ad-hoc-Berechnung</h2>
-        <div class="form-row">
-          <div class="field">
-            <label>Startadresse</label>
-            <input id="startAddress" type="text" placeholder="z. B. Musterstraße 1, 10115 Berlin" autocomplete="off">
-          </div>
-          <div class="field">
-            <label>Zieladresse</label>
-            <input id="destAddress" type="text" placeholder="z. B. Bahnhofstraße 5" autocomplete="off">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Transportmittel</label>
-            <select id="travelMode">
-              <option value="DRIVING" selected>Auto</option>
-              <option value="BICYCLING">Fahrrad</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Routenpriorität</label>
-            <select id="routePriority">
-              <option value="traffic_lights" selected>Wenigste Ampeln</option>
-              <option value="fastest">Schnellste Route</option>
-              <option value="shortest">Kürzeste Route</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-check" id="pedestrianOption" style="display: none;">
-          <input type="checkbox" class="form-check-input" id="usePedestrianPaths" checked>
-          <label class="form-check-label" for="usePedestrianPaths">Bis zu 10% Fußgängerwege nutzen (Fahrrad)</label>
-          </div>
-          <button class="primary" id="calculateRouteBtn">Berechnen: Beste Route finden</button>
-          <button class="action-btn secondary" id="saveStartBtn">Start speichern</button>
-          <button class="action-btn secondary" id="saveDestBtn">Ziel speichern</button>
-        </div>
-        <div id="map">
-          <div id="map-fallback">Karte konnte nicht geladen werden. Bitte Billing, API-Key oder Netzwerk prüfen.</div>
-        </div>
-        <div id="result" class="muted">Ergebnis erscheint hier.</div>
+      <div class="mb-3">
+        <label for="destAddress" class="form-label">Zieladresse</label>
+        <input type="text" class="form-control" id="destAddress" placeholder="z.B. Bonn Hauptbahnhof">
       </div>
-    </div>
-    <div id="routes" class="tab-content">
-      <div class="panel">
-        <h2>Neue Route</h2>
-        <div class="form-row">
-          <div class="field">
-            <label>Titel</label>
-            <input id="rideTitle" type="text" placeholder="z. B. Zur Arbeit">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Startadresse</label>
-            <input id="rideOrigin" type="text" placeholder="Start (Autocomplete)">
-          </div>
-          <div class="field">
-            <label>Zieladresse</label>
-            <input id="rideDestination" type="text" placeholder="Ziel (Autocomplete)">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Transportmittel</label>
-            <select id="rideTravelMode">
-              <option value="DRIVING" selected>Auto</option>
-              <option value="BICYCLING">Fahrrad</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Routenpriorität</label>
-            <select id="ridePriority">
-              <option value="traffic_lights" selected>Wenigste Ampeln</option>
-              <option value="fastest">Schnellste Route</option>
-              <option value="shortest">Kürzeste Route</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <button class="primary" id="saveRouteBtn">Route speichern</button>
-          <button class="action-btn secondary" id="clearRouteFormBtn">Form löschen</button>
-        </div>
-        <div class="rides-list">
-          <h3 style="margin: 12px 0 8px; font-size: 16px; color: #dfe9f3">Deine Routen</h3>
-          <div id="routesList" class="rides-list"></div>
-        </div>
+      <div class="mb-3">
+        <label for="travelMode" class="form-label">Verkehrsmittel</label>
+        <select class="form-select" id="travelMode">
+          <option value="BICYCLING">Fahrrad</option>
+          <option value="DRIVING">Auto</option>
+        </select>
       </div>
-    </div>
+      <div class="mb-3">
+        <label for="routePriority" class="form-label">Priorität</label>
+        <select class="form-select" id="routePriority">
+          <option value="traffic_lights">Wenigste Ampeln</option>
+          <option value="fastest">Schnellste Route</option>
+          <option value="shortest">Kürzeste Route</option>
+        </select>
+      </div>
+      <div class="form-check mb-3" id="pedestrianOption" style="display: block;">
+        <input type="checkbox" class="form-check-input" id="usePedestrianPaths" checked>
+        <label class="form-check-label" for="usePedestrianPaths">Bis zu 10% Fußgängerwege nutzen (Fahrrad)</label>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="calculateRoute()">Route berechnen</button>
+    </form>
+    <div id="result" class="result"></div>
+    <div id="map" class="mt-3"></div>
+    <div id="loading" class="loading">Lädt...</div>
   </div>
-  <script async loading="async" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,geometry&v=weekly&region=DE&callback=initMap"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,geometry"></script>
   <script src="ampelfrei.js"></script>
+  <script>
+    // Zeige Fußgängerweg-Option nur für Fahrradfahrer
+    document.getElementById('travelMode').addEventListener('change', function() {
+      document.getElementById('pedestrianOption').style.display = this.value === 'BICYCLING' ? 'block' : 'none';
+    });
+  </script>
 </body>
 </html>
