@@ -31,7 +31,6 @@ function showResult(message, type) {
   resultDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
 }
 
-// Funktion zum Dekodieren von Google Polylines
 function decodePolyline(encoded) {
   if (!encoded) return [];
   let points = [];
@@ -174,7 +173,6 @@ async function calculateRoute() {
         let pedestrianDistance = 0;
 
         if (usePedestrianPaths && travelMode === 'BICYCLING') {
-          // Berechne Anteil der Fußgängerwege
           const steps = leg.steps;
           let totalDistance = leg.distance.value;
           pedestrianDistance = steps.reduce((acc, step) => {
@@ -219,7 +217,6 @@ async function calculateRoute() {
         throw new Error('Keine gültigen Routen gefunden.');
       }
 
-      // Route auf Karte anzeigen
       const directionsRenderer = new google.maps.DirectionsRenderer();
       directionsRenderer.setMap(map);
       const directionsService = new google.maps.DirectionsService();
