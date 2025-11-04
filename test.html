@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Google Maps Directions</title>
+  <style>
+    #map { height: 400px; width: 100%; }
+    #result { margin-top: 10px; font-family: Arial; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="result">Ergebnis erscheint hier.</div>
+  <script async loading="async" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmA_2wFMG2eXCJF0stxziBnM4CVNpoB0&libraries=places,directions,geometry&v=weekly&region=DE&callback=initMap"></script>
+  <script>
+    function initMap() {
+      console.log('Google Maps API geladen:', {
+        places: !!window.google?.maps?.places,
+        directions: !!window.google?.maps?.directions,
+        geometry: !!window.google?.maps?.geometry,
+        directionsService: !!window.google?.maps?.DirectionsService
+      });
+
+      const map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 12,
+        center: { lat: 52.52, lng: 13.405 }
+      });
+
+      if (!google.maps.directions) {
+        document.getElementById('result').innerText = 'Fehler: Directions API nicht geladen.';
+        return;
+      }
+
+      const directionsService = new google.maps.DirectionsService();
+      const directionsRenderer = new google.maps.DirectionsRenderer({ map: map });
+
+      directionsService.route({
+        origin: 'Alexanderplatz, Berlin',
+        destination: 'Brandenburger Tor, Berlin',
+        travelMode: google.maps.TravelMode.DRIVING
+      }, (result, status) => {
+        console.log('Directions Status:', status, result);
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+          document.getElementById('result').innerText = 'Route erfolgreich geladen!';
+        } else {
+          document.getElementById('result').innerText = 'Fehler bei der Routenberechnung: ' + status;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
