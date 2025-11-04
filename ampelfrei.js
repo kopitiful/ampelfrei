@@ -241,6 +241,27 @@ async function calculateRoute() {
     return;
   }
 
+  async function getDirections(origin, destination, travelMode) {
+  const mode = travelMode === 'BICYCLING' ? 'bicycling' : 'driving';
+  const url = `http://localhost:3000/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true`;
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === 'OK') {
+        return data;
+      } else {
+        throw new Error(`Directions API Status: ${data.status}`);
+      }
+    } else {
+      throw new Error(`Proxy-Fehler: ${response.status}`);
+    }
+  } catch (e) {
+    console.error('Directions Proxy-Fehler:', e);
+    throw e;
+  }
+}
+
   whenMapsReady(async () => {
     if (!map) {
       showResult('Fehler: Karte nicht geladen. Prüfe API-Key und Billing.', 'danger');
