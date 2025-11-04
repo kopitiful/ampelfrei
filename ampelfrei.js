@@ -280,9 +280,15 @@ async function calculateRoute() {
 
     console.group('🗺️ AmpelFrei Berechnung: ' + startVal + ' → ' + destVal);
     try {
-      // REST Directions API aufrufen
       console.log('Rufe REST Directions API auf...');
       const data = await getDirections(startVal, destVal, travelMode);
+      if (data.status !== 'OK') {
+        throw new Error(`Directions API Status: ${data.status} - ${data.error_message || 'Unbekannter Fehler'}`);
+      }
+      if (!data.routes || data.routes.length === 0) {
+        throw new Error('Keine Routen gefunden. Prüfe die Adressen.');
+      }
+
       const routes = data.routes;
       let bestRoute = null;
       let minScore = Infinity;
@@ -290,11 +296,20 @@ async function calculateRoute() {
 
       for (let i = 0; i < routes.length; i++) {
         const route = routes[i];
+        // Verwende overview_polyline statt overview_path
+        if (!route.overview_polyline || !route.overview_polyline.points) {
+          console.warn(`Route ${i} hat kein overview_polyline. Überspringe.`);
+          continue;
+        }
+        const path = decodePolyline(route.overview_polyline.points);
+        if (path.length === 0) {
+          console.warn(`Route ${i} konnte nicht dekodiert werden. Überspringe.`);
+          continue;
+        }
         const leg = route.legs[0];
-        const path = route.overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
         const trafficLights = await getTrafficLights(path);
-        const distance = leg.distance.value / 1000;
-        const duration = leg.duration.value / 60;
+        const distance = leg.distance.value / 1000; // in km
+        const duration = leg.duration.value / 60; // in Minuten
         let score;
         if (priority === 'traffic_lights') {
           score = trafficLights * 10 + distance;
@@ -316,6 +331,10 @@ async function calculateRoute() {
         }
       }
 
+      if (!bestRoute) {
+        throw new Error('Keine gültigen Routen mit overview_polyline gefunden.');
+      }
+
       // Route auf Karte anzeigen
       const directionsRenderer = new google.maps.DirectionsRenderer();
       directionsRenderer.setMap(map);
@@ -329,6 +348,9 @@ async function calculateRoute() {
         if (status === 'OK') {
           directionsRenderer.setDirections(result);
           directionsRenderer.setRouteIndex(bestRoute.index);
+        } else {
+          console.error('DirectionsService Fehler:', status);
+          showResult(`Fehler beim Rendern der Route: ${status}`, 'danger');
         }
       });
 
