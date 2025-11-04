@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de http://localhost:3000; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://*.googleapis.com https://*.gstatic.com https://fonts.gstatic.com http://maps.google.com data:; font-src 'self' https://fonts.gstatic.com;">  <title>AmpelFrei — Weniger Ampeln, mehr Fahrt</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com; connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://gstatic.com https://overpass-api.de http://localhost:3000; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://*.googleapis.com https://*.gstatic.com https://fonts.gstatic.com http://maps.google.com data:; font-src 'self' https://fonts.gstatic.com;"> <title>AmpelFrei — Weniger Ampeln, mehr Fahrt</title>
   <link rel="preconnect" href="https://maps.googleapis.com">
   <style>
     /* Dein bestehendes CSS (unverändert) – siehe vorherige Antwort für vollständigen CSS */
@@ -265,15 +265,6 @@
     <div id="adhoc" class="tab-content active">
       <div class="panel" aria-live="polite">
         <h2>Ad-hoc-Berechnung</h2>
-        <div class="form-row">
-  <div class="form-check" id="pedestrianOption" style="display: ${document.getElementById('travelMode').value === 'BICYCLING' ? 'block' : 'none'};">
-    <input type="checkbox" class="form-check-input" id="usePedestrianPaths" checked>
-    <label class="form-check-label" for="usePedestrianPaths">Bis zu 10% Fußgängerwege nutzen (Fahrrad)</label>
-  </div>
-  <button class="primary" id="calculateRouteBtn">Berechnen: Beste Route finden</button>
-  <button class="action-btn secondary" id="saveStartBtn">Start speichern</button>
-  <button class="action-btn secondary" id="saveDestBtn">Ziel speichern</button>
-</div>
         <div class="form-row">
           <div class="field">
             <label>Startadresse</label>
