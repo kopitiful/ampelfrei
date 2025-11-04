@@ -98,9 +98,9 @@ function initializeMap() {
 }
 
 // REST Directions API aufrufen
-async function getDirections(origin, destination, travelMode) {
+  async function getDirections(origin, destination, travelMode) {
   const mode = travelMode === 'BICYCLING' ? 'bicycling' : 'driving';
-  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true&key=${API_KEY}`;
+  const url = `http://localhost:3000/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true`;
   try {
     const response = await fetch(url);
     if (response.ok) {
@@ -111,13 +111,14 @@ async function getDirections(origin, destination, travelMode) {
         throw new Error(`Directions API Status: ${data.status}`);
       }
     } else {
-      throw new Error(`HTTP Fehler: ${response.status}`);
+      throw new Error(`Proxy-Fehler: ${response.status}`);
     }
   } catch (e) {
-    console.error('Directions API Fehler:', e);
+    console.error('Directions Proxy-Fehler:', e);
     throw e;
   }
 }
+
 
 // Fallback für Distanzberechnung ohne Geometry
 function computeDistanceFallback(lat1, lng1, lat2, lng2) {
@@ -240,27 +241,6 @@ async function calculateRoute() {
     showLoading(false);
     return;
   }
-
-  async function getDirections(origin, destination, travelMode) {
-  const mode = travelMode === 'BICYCLING' ? 'bicycling' : 'driving';
-  const url = `http://localhost:3000/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&alternatives=true`;
-  try {
-    const response = await fetch(url);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === 'OK') {
-        return data;
-      } else {
-        throw new Error(`Directions API Status: ${data.status}`);
-      }
-    } else {
-      throw new Error(`Proxy-Fehler: ${response.status}`);
-    }
-  } catch (e) {
-    console.error('Directions Proxy-Fehler:', e);
-    throw e;
-  }
-}
 
   whenMapsReady(async () => {
     if (!map) {
