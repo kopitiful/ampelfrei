@@ -520,17 +520,19 @@ function renderRoutes() {
     list.appendChild(el);
 
     // Ampel-Berechnung für gespeicherte Routen
-    getDirections(r.originAddress, r.destinationAddress, r.travelMode).then(data => {
-      const path = data.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-      getTrafficLights(path).then(count => {
-        const elp = document.getElementById(`traffic_${r.id}`);
-        if (elp) elp.innerHTML = `🚦 ${count} Ampeln`;
-      });
-    }).catch(e => {
-      console.error('Fehler bei gespeicherter Route:', e);
-      const elp = document.getElementById(`traffic_${r.id}`);
-      if (elp) elp.innerHTML = '🚦 Fehler bei Berechnung';
-    });
+// Innerhalb der Schleife in renderRoutes, ersetze den getDirections-Aufruf:
+getDirections(r.originAddress, r.destinationAddress, r.travelMode, r.travelMode === 'BICYCLING' && document.getElementById('usePedestrianPaths').checked).then(results => {
+  const bestResult = results.find(res => res.mode === (r.travelMode === 'BICYCLING' ? 'bicycling' : 'driving')) || results[0];
+  const path = decodePolyline(bestResult.data.routes[0].overview_polyline.points);
+  getTrafficLights(path).then(count => {
+    const elp = document.getElementById(`traffic_${r.id}`);
+    if (elp) elp.innerHTML = `🚦 ${count} Ampeln`;
+  });
+}).catch(e => {
+  console.error('Fehler bei gespeicherter Route:', e);
+  const elp = document.getElementById(`traffic_${r.id}`);
+  if (elp) elp.innerHTML = '🚦 Fehler bei Berechnung';
+});
   }
 }
 
